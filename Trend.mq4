@@ -28,6 +28,8 @@ extern double odmikSL;               // Odmik pri postavljanju stop-loss na brea
 #define NAPAKA     -5   // oznaka za povratno vrednost pri neuspešno izvedenem klicu funkcije;
 #define NAD        -1   // cena nad črto indikatorja
 #define POD        -2   // cena pod črto indikatorja 
+#define ODPRTO     -6   // trgovanje je odprto
+#define ZAPRTO     -7   // trgovanje je zaprto
 #define S0          1   // oznaka za stanje S0 - Čakanje na zagon;
 #define S1          2   // oznaka za stanje S1 - Nakup;
 #define S2          3   // oznaka za stanje S2 - Prodaja;
@@ -42,6 +44,7 @@ int    spozicija1;        // Enolična oznaka 1. dela odprte prodajne pozicije. 
 int    spozicija2;        // Enolična oznaka 1. dela odprte prodajne pozicije. Če ne obstaja, potem ima vrednost NEVELJAVNO;
 int    stanje;            // Trenutno stanje algoritma;
 int    zacetnaPozicija;   // ali smo začeli nad ali pod črto indikatorja;
+int    trgovanje;         // indikator ali je trgovanje odprto ali zaprto;
 int    stevilkaIteracije; // Številka trenutne iteracije;
 int    verzija = 1;       // Trenutna verzija algoritma;
 
@@ -95,6 +98,7 @@ int init()
   // ------------------ Konec bloka za klice servisnih funkcij -------------------------------------------------------------------------------
   
   if( Bid >= CenaIndikatorja() ) { zacetnaPozicija = NAD; } else { zacetnaPozicija = POD; };
+  
   if( n == 0 ) // Številka iteracije ni podana - začnemo novo iteracijo
   { 
     PonastaviVrednostiPodatkovnihStruktur();
@@ -231,12 +235,12 @@ int IzracunajStanje()
   c = CenaIndikatorja();
   if( Bid >= c )                                    // ali smo nad črto ali pod črto?
   {
-    if( bpozicija == NEVELJAVNO ) { return( S0 ); } // nad črto in brez odprte pozicije
+    if( bpozicija == NEVELJAVNO ) { zacetnaPozicija = NAD; trgovanje = ZAPRTO; return( S0 ); } // nad črto in brez odprte pozicije
     else                          { return( S1 ); } // nad črto, nakup
   }
   else
   {
-    if( spozicija == NEVELJAVNO ) { return( S0 ); } // pod črto in brez odprte pozicije
+    if( spozicija == NEVELJAVNO ) { zacetnaPozicija = POD; trgovanje = ZAPRTO; return( S0 ); } // pod črto in brez odprte pozicije
     else                          { return( S2 ); } // pod črto, prodaja
   }
 } // IzracunajStanje
@@ -269,7 +273,7 @@ int OdpriNovoIteracijo()
 
 
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-FUNKCIJA: OdpriPozicijo( int Smer, double sl )
+FUNKCIJA: OdpriPozicijo( int Smer, double v, double sl, double tp )
 ----------------------------------------------------
 (o) Funkcionalnost: Odpre pozicijo po trenutni tržni ceni v podani Smeri in nastavi stop loss na podano ceno
 (o) Zaloga vrednosti: ID odprte pozicije;
@@ -318,6 +322,7 @@ int PonastaviVrednostiPodatkovnihStruktur()
 {
   bpozicija = NEVELJAVNO;
   spozicija = NEVELJAVNO;
+  trgovanje = ZAPRTO;
   return( USPEH );
 } // PonastaviVrednostiPodatkovnihStruktur
 
@@ -632,13 +637,19 @@ V to stanje vstopimo po zaključenem nastavljanju začetnih vrednosti. Čakamo n
 int S0CakanjeNaZagon()
 {
   double c = CenaIndikatorja();
-  if( ( zacetnaPozicija == NAD ) && ( Ask <= ( c - d ) ) ) 
+  
+  // najprej preverimo ali je morda trgovanje zaprto in so izpolnjeni pogoji za odpiranje
+  if( ( trgovanje == ZAPRTO ) && ( zacetnaPozicija == NAD ) && ( Ask <= c ) ) { trgovanje = ODPRTO; }
+  if( ( trgovanje == ZAPRTO ) && ( zacetnaPozicija == POD ) && ( Bid >= c ) ) { trgovanje = ODPRTO; }
+  
+  // preverimo ali je izpolnjen pogoj za odpiranje SELL pozicij
+  if( ( trgovanje == ODPRTO ) && ( Ask <= ( c - d ) ) ) 
   { 
     spozicija1 = OdpriPozicijo( OP_SELL, 2*L, c, c - d - p ); 
     spozicija2 = OdpriPozicijo( OP_SELL,   L, c, 0         );
     return( S2 );
   }
-  if( ( zacetnaPozicija == POD ) && ( Bid >= ( c + d ) ) ) 
+  if( ( trgovanje == ODPRTO ) && ( Bid >= ( c + d ) ) ) 
   { 
     bpozicija1 = OdpriPozicijo( OP_BUY, 2*L, c, c + d + p ); 
     bpozicija2 = OdpriPozicijo( OP_BUY,   L, c, 0         );
@@ -650,12 +661,16 @@ int S0CakanjeNaZagon()
 
 
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-FUNKCIJA DKA: S1ZacetnoStanje()
-V tem stanju se znajdemo, ko je valutni par dosegel ceno zahtevano v parametru cz (prehod iz stanja S0) oziroma v primeru, da je bil parameter cz ob zagonu algoritma enak 0, 
-postane trenutna vrednost cz, trenutna cena (Bid) valutnega para. V tem stanju čakamo, da bo dosežena bodisi osnovna raven za nakup b0 ali osnovna raven za prodajo s0. 
+FUNKCIJA DKA: S1Nakup()
+V tem stanju se znajdemo, ko je valutni par dosegel zahtevano razdaljo od vrednosti indikatorja in sta odprti obe poziciji.
+V tem stanju čakamo, da bo doseženo naslednje:
+(-) take profit prve pozicije;
+(-) izpolnjen pogoj za postavljanje SL druge pozicije na break even;
+(-) izpolnjen pogoj za zapiranje druge pozicije in prehod v prodajo. 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-int S1ZacetnoStanje()
+int S1Nakup()
 { 
+  
   if( Bid >= ceneBravni[ 0 ] ) { bpozicije[ 0 ] = OdpriPozicijo( OP_BUY,  ceneSravni[ 0 ], 0 ); braven = 0; sraven = NEVELJAVNO; return( S2 ); }
   if( Ask <= ceneSravni[ 0 ] ) { spozicije[ 0 ] = OdpriPozicijo( OP_SELL, ceneBravni[ 0 ], 0 ); sraven = 0; braven = NEVELJAVNO; return( S3 ); }
   return( S1 );
