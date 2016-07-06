@@ -217,6 +217,17 @@ int IzpisiPozdravnoSporocilo()
   return( USPEH );
 } // IzpisiPozdravnoSporocilo
 
+/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+FUNKCIJA: IzracunajStanje
+-------------------------
+(o) Funkcionalnost: glede na trenutno stanje podatkovnih struktur algoritma in trenutno ceno valutnega para (Bid) izračuna stanje algoritma
+(o) Zaloga vrednosti: 
+ (-) če je bilo stanje algoritma mogoče izračunati, potem vrne kodo stanja
+ (-) NAPAKA: stanja ni bilo mogoče izračunati
+(o) Vhodni parametri: / - uporablja globalne podatkovne strukture
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+IzpolnjenPogojzaBE( spozicija1 ) == true
+
 
 
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -682,15 +693,15 @@ int S1Nakup()
   if( IzpolnjenPogojzaBE( bpozicija1 ) == true ) { PostaviSL( bpozicija1, 0 ); }
   if( IzpolnjenPogojzaBE( bpozicija2 ) == true ) { PostaviSL( bpozicija2, 0 ); }
   
-  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S0
-  if( ( PozicijaZaprta( bpozicija1 ) == true ) && ( PozicijaZaprta( bpozicija2 ) == true ) ) { return( S0 ); }
+  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S4 in od tam v S0 - odvisno od nastavitev
+  if( ( PozicijaZaprta( bpozicija1 ) == true ) && ( PozicijaZaprta( bpozicija2 ) == true ) ) { return( S4 ); }
   
   // preverimo ali je izpolnjen pogoj za zapiranje nakupnih pozicij in odpiranje prodajnih pozicij.
-  // Če da, potem zapremo bpozicija2 (bpozicija1 mora biti že zaprta) in se vrnemo v S0, tam je poskrbljeno za odpiranje pozicij v pravo smer.
+  // Če da, potem zapremo bpozicija2 (bpozicija1 mora biti že zaprta) in gremo v S4 od tam pa v S0 - odvisno od nastavitev kjer je poskrbljeno za odpiranje novih pozicij
   if( Ask <= ( c - d ) ) 
   {
     if( PozicijaZaprta( bpozicija2 ) == false ) { ZapriPozicijo( bpozicija2 ); }
-    return( S0 );
+    return( S4 );
   }
   
   // če ni izpolnjenih nobenih drugih pogojev, potem ostanemo v stanju S1
@@ -717,15 +728,15 @@ int S2Prodaja()
   if( IzpolnjenPogojzaBE( spozicija1 ) == true ) { PostaviSL( spozicija1, 0 ); }
   if( IzpolnjenPogojzaBE( spozicija2 ) == true ) { PostaviSL( spozicija2, 0 ); }
   
-  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S0
-  if( ( PozicijaZaprta( spozicija1 ) == true ) && ( PozicijaZaprta( spozicija2 ) == true ) ) { return( S0 ); }
+  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S4, od tam pa v S0 - odvisno od nastavitev
+  if( ( PozicijaZaprta( spozicija1 ) == true ) && ( PozicijaZaprta( spozicija2 ) == true ) ) { return( S4 ); }
   
   // preverimo ali je izpolnjen pogoj za zapiranje nakupnih pozicij in odpiranje prodajnih pozicij.
-  // Če da, potem zapremo spozicija2 (spozicija1 mora biti že zaprta) in se vrnemo v S0, tam je poskrbljeno za odpiranje pozicij v pravo smer.
+  // Če da, potem zapremo spozicija2 (spozicija1 mora biti že zaprta) in se vrnemo v S4, od tam pa v S0 - odvisno od nastavitev, tam je poskrbljeno za odpiranje novih pozicij
   if( Bid >= ( c + d ) ) 
   {
     if( PozicijaZaprta( spozicija2 ) == false ) { ZapriPozicijo( spozicija2 ); }
-    return( S0 );
+    return( S4 );
   }
   
   // če ni izpolnjenih nobenih drugih pogojev, potem ostanemo v stanju S2
@@ -741,5 +752,5 @@ algoritma. Če je vrednost parametra samodejni zagon enaka DA, potem ustrezno po
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 int S4Zakljucek()
 { 
-  if( ( samodejniPonovniZagon > 0 ) && ( IzpolnjenPogojZaPonovniZagon() == true ) ) { cz = 0; n = 0; init(); return( S0 ); } else { return( S4 ); }
+  if( samodejniPonovniZagon > 0 ) { return( S0 ); } else { return( S4 ); }
 } // S4Zakljucek
