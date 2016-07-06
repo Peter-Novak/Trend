@@ -649,20 +649,24 @@ int S0CakanjeNaZagon()
     spozicija2 = OdpriPozicijo( OP_SELL,   L, c, 0         );
     return( S2 );
   }
+  
+  // preverimo ali je izpolnjen pogoj za odpiranje BUY pozicij
   if( ( trgovanje == ODPRTO ) && ( Bid >= ( c + d ) ) ) 
   { 
     bpozicija1 = OdpriPozicijo( OP_BUY, 2*L, c, c + d + p ); 
     bpozicija2 = OdpriPozicijo( OP_BUY,   L, c, 0         );
     return( S1 );
   }
-  { return( S0 ); }
+  
+  // če ni izpolnjen nobeden od pogojev, ostanemo v stanju S0
+  return( S0 );
 } // S0CakanjeNaZagon
 
 
 
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 FUNKCIJA DKA: S1Nakup()
-V tem stanju se znajdemo, ko je valutni par dosegel zahtevano razdaljo od vrednosti indikatorja in sta odprti obe poziciji.
+V tem stanju se znajdemo, ko je valutni par dosegel zahtevano razdaljo d od vrednosti indikatorja in sta odprti obe poziciji.
 V tem stanju čakamo, da bo doseženo naslednje:
 (-) take profit prve pozicije;
 (-) izpolnjen pogoj za postavljanje SL druge pozicije na break even;
@@ -670,163 +674,63 @@ V tem stanju čakamo, da bo doseženo naslednje:
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 int S1Nakup()
 { 
+  double c; // vrednost indikatorja
   
-  if( Bid >= ceneBravni[ 0 ] ) { bpozicije[ 0 ] = OdpriPozicijo( OP_BUY,  ceneSravni[ 0 ], 0 ); braven = 0; sraven = NEVELJAVNO; return( S2 ); }
-  if( Ask <= ceneSravni[ 0 ] ) { spozicije[ 0 ] = OdpriPozicijo( OP_SELL, ceneBravni[ 0 ], 0 ); sraven = 0; braven = NEVELJAVNO; return( S3 ); }
+  c = CenaIndikatorja();
+  
+  // preverimo ali je izpolnjen pogoj za postavljanje SL pozicij na BE
+  if( IzpolnjenPogojzaBE( bpozicija1 ) == true ) { PostaviSL( bpozicija1, 0 ); }
+  if( IzpolnjenPogojzaBE( bpozicija2 ) == true ) { PostaviSL( bpozicija2, 0 ); }
+  
+  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S0
+  if( ( PozicijaZaprta( bpozicija1 ) == true ) && ( PozicijaZaprta( bpozicija2 ) == true ) ) { return( S0 ); }
+  
+  // preverimo ali je izpolnjen pogoj za zapiranje nakupnih pozicij in odpiranje prodajnih pozicij.
+  // Če da, potem zapremo bpozicija2 (bpozicija1 mora biti že zaprta) in se vrnemo v S0, tam je poskrbljeno za odpiranje pozicij v pravo smer.
+  if( Ask <= ( c - d ) ) 
+  {
+    if( PozicijaZaprta( bpozicija2 ) == false ) { ZapriPozicijo( bpozicija2 ); }
+    return( S0 );
+  }
+  
+  // če ni izpolnjenih nobenih drugih pogojev, potem ostanemo v stanju S1
   return( S1 );
-} // S1ZacetnoStanje
+} // S1Nakup
 
 
 
 /*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-FUNKCIJA DKA: S2Nakup()
-V tem stanju se znajdemo, ko je cena valutnega para dosegla osnovno raven za nakup in velja braven ≥ 0 . V vsakem trenutku je odprta najmanj ena pozicija buy. V tem stanju 
-spremljamo raven na kateri se nahajamo in ustrezno vzdržujemo odprte buy pozicije. 
+FUNKCIJA DKA: S2Prodaja()
+V tem stanju se znajdemo, ko je valutni par dosegel zahtevano razdaljo d od vrednosti indikatorja in sta odprti obe poziciji.
+V tem stanju čakamo, da bo doseženo naslednje:
+(-) take profit prve pozicije;
+(-) izpolnjen pogoj za postavljanje SL druge pozicije na break even;
+(-) izpolnjen pogoj za zapiranje druge pozicije in prehod v prodajo. 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-int S2Nakup()
+int S2Prodaja()
 { 
-  int    i;         // števec  
-  string sporocilo; // string za sporočilo, ki ga pošljemo ob doseženem profitnem cilju
-  bool   stonoga;   // pomožna spremenljivka - hrani informacijo ali smo pustili eno pozicijo za stonogo
+  double c; // vrednost indikatorja
   
-  // prehod v stanje S3 - Prodaja
-  if( Ask <= ceneSravni[ 0 ] ) 
-  { 
-    for( i = 0; i < MAX_POZ; i++ ) 
-    { 
-      if( bpozicije[ i ] == ZASEDENO ) { bpozicije[ i ] = PROSTO; }
-      if( bpozicije[ i ] != PROSTO   ) 
-      { 
-        if( PozicijaZaprta( bpozicije[ i ] ) == false ) { ZapriPozicijo( bpozicije[ i ] ); }
-        izkupicekIteracije = izkupicekIteracije + VrednostPozicije( bpozicije[ i ] ); bpozicije[ i ] = PROSTO;  
-      } 
-    }
-    spozicije[ 0 ] = OdpriPozicijo( OP_SELL, ceneBravni[ 0 ], 0 ); braven = NEVELJAVNO; sraven = 0; return( S3 );
-  }  
-  // prehod v stanje S4 - Zaključek
-  skupniIzkupicek = izkupicekIteracije + VrednostOdprtihPozicij();
-  if( skupniIzkupicek >= p )
+  c = CenaIndikatorja();
+  
+  // preverimo ali je izpolnjen pogoj za postavljanje SL pozicij na BE
+  if( IzpolnjenPogojzaBE( spozicija1 ) == true ) { PostaviSL( spozicija1, 0 ); }
+  if( IzpolnjenPogojzaBE( spozicija2 ) == true ) { PostaviSL( spozicija2, 0 ); }
+  
+  // preverimo ali sta morda obe poziciji zaprti (to se zgodi če je dosežen SL) - v tem primeru gremo v S0
+  if( ( PozicijaZaprta( spozicija1 ) == true ) && ( PozicijaZaprta( spozicija2 ) == true ) ) { return( S0 ); }
+  
+  // preverimo ali je izpolnjen pogoj za zapiranje nakupnih pozicij in odpiranje prodajnih pozicij.
+  // Če da, potem zapremo spozicija2 (spozicija1 mora biti že zaprta) in se vrnemo v S0, tam je poskrbljeno za odpiranje pozicij v pravo smer.
+  if( Bid >= ( c + d ) ) 
   {
-    stonoga = false;
-    for( i = 0; i < MAX_POZ; i++ ) 
-    { 
-      if( bpozicije[ i ] == ZASEDENO ) { bpozicije[ i ] = PROSTO; }
-      if( bpozicije[ i ] != PROSTO )   
-      { 
-        if( PozicijaZaprta( bpozicije[ i ] ) == false ) 
-        { 
-          if( stonoga == true ) { ZapriPozicijo( bpozicije[ i ] ); } else { PostaviSL( bpozicije[ i ], odmikSL ); stonoga = true; }; 
-        } 
-      }
-    }
-    sporocilo = "Kaching: " + Symbol() + " iteracija " + IntegerToString( stevilkaIteracije ) + "!!!!!";
-    braven = NEVELJAVNO; sraven = NEVELJAVNO; SendNotification( sporocilo ); ck = Bid; return( S4 );
+    if( PozicijaZaprta( spozicija2 ) == false ) { ZapriPozicijo( spozicija2 ); }
+    return( S0 );
   }
   
-  // dosežena je naslednja višja raven
-  if( Bid >= ceneBravni[ braven + 1 ] )
-  {
-    if( ( bpozicije[ braven ] != PROSTO ) && ( bpozicije[ braven ] != ZASEDENO ) && ( PozicijaZaprta( bpozicije[ braven ] ) == false ) ) { PostaviSL( bpozicije[ braven ], odmikSL ); }
-    if( bpozicije[ braven+1 ] == PROSTO ) { bpozicije[ braven + 1 ] = OdpriPozicijo( OP_BUY,  ceneSravni[ 0 ], braven + 1 ); }
-    braven++;
-    Print(  ":[", stevilkaIteracije, "]:", "Nova nakupna raven: ", braven, " @", DoubleToString( ceneBravni[ braven ], 5 ) );
-  }
-  
-  // cena pade pod trenutno raven
-  if( Bid <= ceneBravni[ braven ] )
-  {
-    if( bpozicije[ braven+1 ] == ZASEDENO ) { bpozicije[ braven+1 ] = PROSTO; }
-    if( ( bpozicije[ braven ] != PROSTO ) && ( bpozicije[ braven ] != ZASEDENO ) && ( PozicijaZaprta( bpozicije[ braven ] ) == true ) ) 
-    { izkupicekIteracije = izkupicekIteracije + VrednostPozicije( bpozicije[ braven ] ); bpozicije[ braven ] = ZASEDENO; }
-    if( braven > 0 ) { braven--; Print( ":[", stevilkaIteracije, "]:", "Nova nakupna raven: ", braven, " @", DoubleToString( ceneBravni[ braven ], 5 ) );  };
-  }
-  
-  // če je bil pri eni od pozicij dosežen stop loss takoj popravimo izkupiček iteracije
-  for( i = 0; i < MAX_POZ; i++ )
-  { 
-    if( ( bpozicije[ braven ] != PROSTO ) && ( bpozicije[ braven ] != ZASEDENO ) && ( PozicijaZaprta( bpozicije[ braven ] ) == true ) ) 
-    { 
-      izkupicekIteracije = izkupicekIteracije + VrednostPozicije( bpozicije[ braven ] ); bpozicije[ braven ] = ZASEDENO; 
-      if( bpozicije[ braven+1 ] == ZASEDENO ) { bpozicije[ braven+1 ] = PROSTO; }  
-    }
-  }
+  // če ni izpolnjenih nobenih drugih pogojev, potem ostanemo v stanju S2
   return( S2 );
-} // S2Nakup
-
-
-
-/*--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-FUNKCIJA DKA: S3Prodaja()
-V tem stanju se znajdemo, ko je cena valutnega para dosegla osnovno raven za prodajo in velja sraven ≥ 0 . V vsakem trenutku je odprta najmanj ena pozicija sell. V tem stanju 
-spremljamo raven na kateri se nahajamo in ustrezno vzdržujemo odprte sell pozicije.  
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-int S3Prodaja()
-{ 
-  int    i;         // števec  
-  string sporocilo; // string za sporočilo, ki ga pošljemo ob doseženem profitnem cilju
-  bool   stonoga;   // pomožna spremenljivka - hrani informacijo ali smo pustili eno pozicijo za stonogo
-  
-  // prehod v stanje S2 - Nakup
-  if( Bid >= ceneBravni[ 0 ] ) 
-  { 
-    for( i = 0; i < MAX_POZ; i++ ) 
-    { 
-      if( spozicije[ i ] == ZASEDENO ) { spozicije[ i ] = PROSTO; }
-      if( spozicije[ i ] != PROSTO   ) 
-      { 
-        if( PozicijaZaprta( spozicije[ i ] ) == false ) { ZapriPozicijo( spozicije[ i ] ); }
-        izkupicekIteracije = izkupicekIteracije + VrednostPozicije( spozicije[ i ] ); spozicije[ i ] = PROSTO;  
-      } 
-    }
-    bpozicije[ 0 ] = OdpriPozicijo( OP_BUY, ceneSravni[ 0 ], 0 ); sraven = NEVELJAVNO; braven = 0; return( S2 );
-  }
-  // prehod v stanje S4 - Zaključek
-  skupniIzkupicek = izkupicekIteracije + VrednostOdprtihPozicij();
-  if( skupniIzkupicek >= p )
-  {
-    stonoga = false;
-    for( i = 0; i < MAX_POZ; i++ ) 
-    { 
-      if( spozicije[ i ] == ZASEDENO ) { spozicije[ i ] = PROSTO; }
-      if( spozicije[ i ] != PROSTO   ) 
-      { 
-        if( PozicijaZaprta( spozicije[ i ] ) == false ) 
-        { 
-          if( stonoga == true ) { ZapriPozicijo( spozicije[ i ] ); } else { PostaviSL( spozicije[ i ], odmikSL ); stonoga = true; };  
-        } 
-      }
-    }
-    sporocilo = "Kaching: " + Symbol() + " iteracija " + IntegerToString( stevilkaIteracije ) + "!!!!!";
-    braven = NEVELJAVNO; sraven = NEVELJAVNO; SendNotification( sporocilo ); ck = Bid; return( S4 );
-  }
-  // dosežena je naslednja višja raven
-  if( Ask <= ceneSravni[ sraven + 1 ] )
-  {
-    if( ( spozicije[ sraven ] != PROSTO ) && ( spozicije[ sraven ] != ZASEDENO ) && ( PozicijaZaprta( spozicije[ sraven ] ) == false ) ) { PostaviSL( spozicije[ sraven ], odmikSL ); }
-    if( spozicije[ sraven+1 ] == PROSTO ) { spozicije[ sraven + 1 ] = OdpriPozicijo( OP_SELL,  ceneBravni[ 0 ], sraven + 1 ); }
-    sraven++;
-    Print( ":[", stevilkaIteracije, "]:", "Nova prodajna raven: ", sraven, " @", DoubleToString( ceneSravni[ sraven ], 5 ) );
-  }
-  // cena pade pod trenutno raven
-  if( Ask >= ceneSravni[ sraven ] )
-  {
-    if( spozicije[ sraven+1 ] == ZASEDENO ) { spozicije[ sraven+1 ] = PROSTO; }
-    if( ( spozicije[ sraven ] != PROSTO ) && ( spozicije[ sraven ] != ZASEDENO ) && ( PozicijaZaprta( spozicije[ sraven ] ) == true ) ) 
-    { izkupicekIteracije = izkupicekIteracije + VrednostPozicije( spozicije[ sraven ] ); spozicije[ sraven ] = ZASEDENO; }
-    if( sraven > 0 ) { sraven--; Print( ":[", stevilkaIteracije, "]:", "Nova prodajna raven: ", sraven, " @", DoubleToString( ceneSravni[ sraven ], 5 ) ); }
-  }
-  // če je bil pri eni od pozicij dosežen stop loss takoj popravimo izkupiček iteracije in označimo pozicijo eno raven višje kot prosto
-  for( i = 0; i < MAX_POZ; i++ )
-  { 
-    if( ( spozicije[ sraven ] != PROSTO ) && ( spozicije[ sraven ] != ZASEDENO ) && ( PozicijaZaprta( spozicije[ sraven ] ) == true ) ) 
-    { 
-      izkupicekIteracije = izkupicekIteracije + VrednostPozicije( spozicije[ sraven ] ); spozicije[ sraven ] = ZASEDENO; 
-      if( spozicije[ sraven+1 ] == ZASEDENO ) { spozicije[ sraven+1 ] = PROSTO; } 
-    }
-  }
-  
-  return( S3 );
-} // S3Prodaja
+} // S2Prodaja
 
 
 
